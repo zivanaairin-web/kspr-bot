@@ -4,13 +4,11 @@ from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
-import os
 
 st.set_page_config(page_title="Cek Resiko Hamil - KSPR", page_icon="🤰")
 st.title("🤰 Cek Resiko Kehamilan - KSPR")
 st.warning("Skrining awal Pondji Rochjati, BUKAN diagnosis. Tetap periksa ke Bidan/Dokter ya Bun..")
 
-# ===== 20 FAKTOR KSPR =====
 FAKTOR = [
     ("Hamil pertama usia <16 tahun", 4),
     ("Hamil pertama usia >35 tahun", 4),
@@ -34,7 +32,6 @@ FAKTOR = [
     ("Preeklampsia berat / kejang-kejang", 8),
 ]
 
-# ===== INPUT =====
 nama = st.text_input("Nama Ibu")
 hp = st.text_input("No HP / WA")
 usia = st.number_input("Usia Kehamilan (minggu)", min_value=1, max_value=45, value=12)
@@ -59,18 +56,14 @@ if st.button("LIHAT HASIL", type="primary"):
     st.success(f"Total Skor: {total} - {kat}")
     st.info(f"Saran: {saran}")
 
-    # ===== SIMPAN KE SHEETS =====
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        
         if "gcp_service_account" in st.secrets:
             creds_dict = dict(st.secrets["gcp_service_account"])
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         else:
             creds = ServiceAccountCredentials.from_json_keyfile_name("kunci.json", scope)
-
         client = gspread.authorize(creds)
-        # GANTI NAMA SHEETS SESUAI PUNYAMU
         sheet = client.open("DATA KSPR").sheet1
         waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         faktor_text = "; ".join([p[0] for p in pilihan]) if pilihan else "Tidak ada faktor"
