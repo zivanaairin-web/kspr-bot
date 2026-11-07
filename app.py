@@ -8,74 +8,73 @@ import os
 
 st.set_page_config(page_title="Cek Resiko Hamil - KSPR", page_icon="🤰")
 st.title("🤰 Cek Resiko Kehamilan - KSPR")
-st.warning("Skrining awal Poedji Rochjati. BUKAN diagnosis. Tetap periksa ke Bidan/Dokter ya Bun.")
+st.warning("Skrining awal Pondji Rochjati, BUKAN diagnosis. Tetap periksa ke Bidan/Dokter ya Bun..")
 
 # ===== 20 FAKTOR KSPR =====
 FAKTOR = [
-    (1, "Hamil pertama usia <=16 tahun?", 4),
-    (2, "Hamil pertama usia >=35 tahun?", 4),
-    (3, "Kawin >=4 tahun baru hamil / jarak hamil >=10 tahun?", 4),
-    (4, "Jarak hamil lagi <2 tahun?", 4),
-    (5, "Anak sudah 4 atau lebih?", 4),
-    (6, "Usia ibu sekarang >=35 tahun?", 4),
-    (7, "Tinggi badan <=145 cm?", 4),
-    (8, "Pernah gagal kehamilan / keguguran?", 4),
-    (9, "Pernah lahiran vakum / uri dirogoh / transfusi?", 4),
-    (10, "Pernah operasi Caesar?", 8),
-    (11, "Punya penyakit: anemia, malaria, TBC, jantung, diabetes, IMS?", 4),
-    (12, "Bengkak muka/tungkai + darah tinggi?", 4),
-    (13, "Hamil kembar 2 atau lebih?", 4),
-    (14, "Air ketuban banyak / perut besar sekali?", 4),
-    (15, "Riwayat bayi mati dalam kandungan?", 4),
-    (16, "Kehamilan lebih bulan (>42 minggu)?", 4),
-    (17, "Letak sungsang?", 8),
-    (18, "Letak lintang?", 8),
-    (19, "Ada perdarahan di kehamilan ini?", 8),
-    (20, "Preeklampsia berat / kejang-kejang?", 8),
+    ("Hamil pertama usia <16 tahun", 4),
+    ("Hamil pertama usia >35 tahun", 4),
+    ("Anak terakhir umur <2 tahun / jarak hamil >10 tahun", 4),
+    ("Jarak hamil lagi <2 tahun", 4),
+    ("Anak sudah 4 atau lebih", 4),
+    ("Usia ibu sekarang >35 tahun", 4),
+    ("Tinggi badan <145 cm", 4),
+    ("Pernah gagal kehamilan / keguguran", 4),
+    ("Pernah melahirkan dengan vakum / tang / operasi caesar", 8),
+    ("Pernah pendarahan hebat setelah melahirkan", 8),
+    ("Pernah kejang / eklamsia", 8),
+    ("Bayi lahir <2500 gram / prematur", 4),
+    ("Pernah bayi meninggal dalam kandungan / setelah lahir", 8),
+    ("Ada penyakit: TBC, jantung, ginjal, diabetes, hipertensi, HIV, malaria", 8),
+    ("Bengkak di kaki / muka + tekanan darah tinggi", 4),
+    ("Kehamilan lebih bulan (>42 minggu)", 4),
+    ("Letak sungsang", 8),
+    ("Letak lintang", 8),
+    ("Ada perdarahan di kehamilan ini", 8),
+    ("Preeklampsia berat / kejang-kejang", 8),
 ]
 
-# ===== FORM PASIEN =====
+# ===== INPUT =====
 nama = st.text_input("Nama Ibu")
-no_hp = st.text_input("No HP / WA")
-usia_hamil = st.number_input("Usia Kehamilan (minggu)", 1, 45, 20)
+hp = st.text_input("No HP / WA")
+usia = st.number_input("Usia Kehamilan (minggu)", min_value=1, max_value=45, value=12)
+st.subheader("Centang jika ada:")
+pilihan = []
+for i, (teks, skor) in enumerate(FAKTOR):
+    if st.checkbox(f"{i+1}. {teks} (skor {skor})"):
+        pilihan.append((teks, skor))
 
-st.subheader("Jawab dengan centang jika YA (Skor awal Bunda = 2)")
-jawaban_ya = []
-for id, tanya, skor in FAKTOR:
-    if st.checkbox(f"{id}. {tanya} (skor {skor})", key=id):
-        jawaban_ya.append((id, skor))
+if st.button("LIHAT HASIL", type="primary"):
+    total = sum(s for _, s in pilihan)
+    if total <= 2:
+        kat = "KRR - Rendah (Hijau)"
+        saran = "Bersalin di Bidan, ANC rutin"
+    elif total <= 6:
+        kat = "KRT - Tinggi (Kuning)"
+        saran = "Wajib periksa ke Dokter/Puskesmas, rujuk terencana"
+    else:
+        kat = "KST - Sangat Tinggi (Merah)"
+        saran = "SEGERA ke RS, harus ditangani Dokter Spesialis!"
 
-def simpan_ke_sheets(nama, no_hp, usia_hamil, total, kategori):
+    st.success(f"Total Skor: {total} - {kat}")
+    st.info(f"Saran: {saran}")
+
+    # ===== SIMPAN KE SHEETS =====
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        # Di Streamlit Cloud pakai secrets, di laptop pakai kunci.json
+        
         if "gcp_service_account" in st.secrets:
             creds_dict = dict(st.secrets["gcp_service_account"])
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         else:
             creds = ServiceAccountCredentials.from_json_keyfile_name("kunci.json", scope)
+
         client = gspread.authorize(creds)
+        # GANTI NAMA SHEETS SESUAI PUNYAMU
         sheet = client.open("DATA KSPR").sheet1
-        sheet.append_row([str(datetime.now()), nama, no_hp, str(usia_hamil), str(total), kategori, str(jawaban_ya)])
-        return True
+        waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        faktor_text = "; ".join([p[0] for p in pilihan]) if pilihan else "Tidak ada faktor"
+        sheet.append_row([waktu, nama, hp, usia, total, kat, faktor_text])
+        st.success("Hasil sudah tersimpan & terkirim ke Bidan ✅")
     except Exception as e:
         st.error(f"Gagal simpan ke Sheets: {e}")
-        return False
-
-if st.button("LIHAT HASIL", type="primary"):
-    total = 2 + sum(s for _, s in jawaban_ya)
-    if total == 2:
-        kategori = "KRR - Rendah (Hijau)"
-        st.success(f"Total Skor: {total} - {kategori}")
-        st.info("Saran: Bersalin di Bidan, ANC rutin")
-    elif total <= 10:
-        kategori = "KRT - Tinggi (Kuning)"
-        st.warning(f"Total Skor: {total} - {kategori}")
-        st.info("Saran: Periksa ke Puskesmas, bersalin dengan tenaga kesehatan")
-    else:
-        kategori = "KRST - Sangat Tinggi (Merah)"
-        st.error(f"Total Skor: {total} - {kategori}")
-        st.info("Saran: WAJIB ke RS / SpOG, segera hubungi bidan!")
-
-    if simpan_ke_sheets(nama, no_hp, usia_hamil, total, kategori):
-        st.success("Hasil sudah tersimpan & terkirim ke Bidan.")
